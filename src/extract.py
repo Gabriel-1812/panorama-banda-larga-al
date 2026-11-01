@@ -39,9 +39,13 @@ def baixar(forcar:bool = False) -> Path:
     temporario.rename(ZIP_PATH)   # só vira .zip quando o download termina inteiro
     return ZIP_PATH
 
-
 def descompactar() -> list[Path]:
-    """Extrai os CSVs do .zip e lista o que veio dentro."""
+    """Extrai os CSVs do .zip. Se já estiverem extraídos, não extrai de novo."""
+    existentes = sorted(EXTRACT_DIR.rglob("*.csv"))
+    if existentes:
+        log.info("CSVs já extraídos (%d arquivos), pulando descompactação", len(existentes))
+        return existentes
+
     with zipfile.ZipFile(ZIP_PATH) as z:
         for info in z.infolist():
             log.info("  %-55s %8.1f MB", info.filename, info.file_size / 1e6)
