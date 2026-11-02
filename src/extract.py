@@ -1,4 +1,4 @@
-# Baixa e descompacta a base de banda larga fixa da Anatel
+#Etapa 1 do pipeline: Baixa e descompacta a base de banda larga fixa da Anatel
 
 import logging
 import zipfile

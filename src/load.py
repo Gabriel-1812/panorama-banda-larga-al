@@ -1,4 +1,4 @@
-"""Etapa 3 do pipeline: recria o esquema e carrega as tabelas no MySQL."""
+#Etapa 3 do pipeline: recria o esquema e carrega as tabelas no MySQL.
 import logging
 from pathlib import Path
 import pandas as pd
@@ -15,7 +15,7 @@ ORDEM_CARGA = ["dim_municipio", "dim_operadora", "fato_acessos"]
 
 
 def recriar_esquema(conn) -> None:
-    """Executa o 01_schema.sql, um comando por vez."""
+    #Executa o 01_schema.sql
     linhas = [linha for linha in SCHEMA.read_text(encoding="utf-8").splitlines()
               if not linha.strip().startswith("--")]
     for comando in "\n".join(linhas).split(";"):
