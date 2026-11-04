@@ -12,9 +12,7 @@ import logging
 import sys
 import time
 from pathlib import Path
-
 import pandas as pd
-
 from src import extract, load, transform
 
 log = logging.getLogger("pipeline")
