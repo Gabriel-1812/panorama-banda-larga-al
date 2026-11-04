@@ -11,7 +11,7 @@ USE banda_larga_al;
 -- =========================================================
 
 -- 0.1 Tamanho das tabelas
--- Esperado: dim_municipio = 102 | dim_operadora e fato_acessos com linhas
+-- Esperado: dim_municipio = 102 | dim_operadora = 555 e fato_acessos = 418489 com linhas
 SELECT 'dim_municipio' AS tabela, COUNT(*) AS linhas FROM dim_municipio
 UNION ALL SELECT 'dim_operadora', COUNT(*) FROM dim_operadora
 UNION ALL SELECT 'fato_acessos', COUNT(*) FROM fato_acessos;
@@ -23,7 +23,7 @@ SELECT MIN(ano_mes)            AS primeiro_mes,
        COUNT(DISTINCT ano_mes) AS meses
 FROM fato_acessos;
 
--- 0.3 Reconciliação com a exploração (todos os produtos, último mês)
+-- 0.3 Reconciliação com a exploração (todos os produtos, último mês 2026-09-01)
 -- Esperado: 387.165
 SELECT SUM(acessos) AS total_ultimo_mes
 FROM fato_acessos
@@ -55,7 +55,7 @@ SELECT SUM(var_pct_mensal IS NULL) AS nulos_mensal,
 FROM vw_evolucao_mensal;
 
 -- 1.3 Total de INTERNET no último mês
--- Esperado: 382.217
+-- Esperado: 382.217 acessos e 1,19% na variação de 12 meses
 SELECT ano_mes, total_acessos, var_pct_12m
 FROM vw_evolucao_mensal
 WHERE ano_mes = (SELECT MAX(ano_mes) FROM vw_evolucao_mensal);
@@ -106,7 +106,7 @@ FROM vw_tecnologia
 ORDER BY meio_acesso;
 
 -- 3.2 Prova dos 100%
--- Esperado: 69 meses, entre 99,99 e 100,01
+-- Esperado: 69 meses, entre 99,99 e 100,02
 SELECT MIN(soma) AS menor_soma,
        MAX(soma) AS maior_soma,
        COUNT(*)  AS meses
@@ -186,7 +186,7 @@ FROM vw_municipio_resumo
 WHERE hhi = 10000 OR operadoras = 1;
 
 -- 5.3 Os 10 mercados mais competitivos (menor HHI)
--- Esperado: Maceió entre eles
+-- Esperado: Arapiraca em primeiro
 SELECT municipio, operadoras, hhi, empresa_lider, participacao_lider_pct
 FROM vw_municipio_resumo
 ORDER BY hhi
