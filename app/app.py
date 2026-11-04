@@ -172,7 +172,7 @@ st.plotly_chart(estilo(fig), width="stretch")
 # =========================================================
 # 2. A virada da fibra
 # =========================================================
-st.subheader("2.A virada da fibra")
+st.subheader("2. A virada da fibra")
 
 fig = px.line(
     no_periodo(tecnologia),
@@ -190,3 +190,88 @@ st.caption(
     f"Em {mes(inicio)}, a fibra respondida por {br(fibra[inicio], 2)}% dos acessos; "
     f"Em {mes(fim)}, por {br(fibra[fim], 2)}%"
 )
+
+# =========================================================
+# 3. Quem lidera o mercado
+# =========================================================
+
+st.subheader(f"3. Quem lidera o mercado ({mes(fim)})")
+
+top = no_fim.head(10).copy()
+top["grupo"] = top["cnpj"].eq(cnpj_destaque).map({True: "Em destaque", False: "Demais"})
+
+fig = px.bar(
+    top,
+    x="participacao_pct",
+    y="rotulo",
+    orientation="h",
+    color="grupo",
+    color_discrete_map={"Em destaque": COR_DESTAQUE, "Demais": COR_NEUTRA},
+    text="participacao_pct",
+    labels={"participacao_pct": "% do mercado", "rotulo": ""},
+)
+fig.update_traces(texttemplate="%{text:.1f}%", textposition="outside",
+                  hovertemplate="%{x:.2f}%")
+fig = estilo(fig, altura=420)
+fig.update_layout(hovermode="closest", showlegend=False,
+                  yaxis={"categoryorder": "total ascending"})
+st.plotly_chart(fig, width="stretch")
+
+# Se a operadora escolhida não está no top 10, avisamos onde ela está
+if cnpj_destaque not in set(top["cnpj"]):
+    posicao = no_fim[no_fim["cnpj"] == cnpj_destaque].iloc[0]
+    st.info(
+        f"**{nome_destaque}** está fora do top 10."
+        f" Está em **{int(posicao['ranking'])}º lugar**, com {br(posicao['participacao_pct'], 2)}% do mercado."
+    )
+
+# =========================================================
+# 4. Operadora em destaque
+# =========================================================
+st.subheader(f"4. Em destaque: {nome_destaque}")
+
+op = no_periodo(destaque[destaque["cnpj"] == cnpj_destaque]).sort_values("ano_mes")
+
+# Grade com TODOS os meses do período: meses sem reporte viram buracos no gráfico
+meses_periodo = pd.DataFrame({"ano_mes": [m for m in meses if inicio <= m <= fim]})
+serie = meses_periodo.merge(op, on="ano_mes", how="left")
+
+atual = op[op["ano_mes"] == fim].iloc[0]
+primeiro = op.iloc[0]
+
+c1, c2, c3 = st.columns(3)
+c1.metric(
+    "Acessos",
+    br(atual["acessos_totais"]),
+    f"{br(atual['acessos_totais'] - primeiro['acessos_totais'])} desde {mes(primeiro['ano_mes'])}",
+)
+c2.metric(
+    "Participação",
+    f"{br(atual['participacao_pct'], 2)}%",
+    f"{br(atual['participacao_pct'] - primeiro['participacao_pct'], 2)} p.p.",
+)
+c3.metric(
+    "Ranking",
+    f"{int(atual['ranking'])}º",
+    f"{int(primeiro['ranking'] - atual['ranking'])} posições desde {mes(primeiro['ano_mes'])}",
+)
+
+g1, g2 = st.columns(2)
+
+fig = px.line(serie, x="ano_mes", y="acessos_totais", markers=True,
+              labels={"ano_mes": "", "acessos_totais": "Acessos"})
+fig.update_traces(line_color=COR_DESTAQUE, hovertemplate="%{y:,.0f} acessos")
+g1.plotly_chart(estilo(fig, altura=300), width="stretch")
+
+fig = px.line(serie, x="ano_mes", y="participacao_pct", markers=True,
+              labels={"ano_mes": "", "participacao_pct": "% do mercado"})
+fig.update_traces(line_color=COR_DESTAQUE, hovertemplate="%{y:.2f}%")
+g2.plotly_chart(estilo(fig, altura=300), width="stretch")
+
+# A pegadinha do Card 4, agora visível para quem usa o dashboard
+meses_sem_reporte = int((op["meses_ultima_aparicao"] - 1).clip(lower=0).sum())
+if meses_sem_reporte:
+    st.warning(
+        f"{nome_destaque} ficou **{meses_sem_reporte} mês(es) sem reportar** acessos no período. "
+        "Esses intervalos aparecem como falhas na linha."
+    )
