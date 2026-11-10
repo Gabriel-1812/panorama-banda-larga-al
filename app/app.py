@@ -83,7 +83,8 @@ municipios = consultar("SELECT * FROM vw_municipio_resumo")
 starlink   = consultar("SELECT * FROM vw_starlink_municipio")
 
 meses = list(evolucao["ano_mes"].sort_values())
-ultimo_mes = meses[-1]
+ref = consultar("SELECT mes_referencia FROM vw_mes_referencia")
+ultimo_mes = pd.Timestamp(ref["mes_referencia"].iloc[0])
 
 # Participação da fibra em cada mês (usada nas duas abas)
 fibra = (tecnologia[tecnologia["meio_acesso"] == "Fibra"]

@@ -83,13 +83,39 @@ TIMESTAMPDIFF(MONTH,ultima_aparicao,ano_mes) AS meses_ultima_aparicao,
 ROUND((acessos_totais - valor_anterior) / valor_anterior * 100, 2) AS var_pct_anterior
 FROM comparacoes;
 
+-- 4,x. vw_mes_referencia
+-- O último mês com dados completos.
+-- Regra: o mês mais recente em que o nº de operadoras com INTERNET é >= 95% da média.
+-- Nos meses normais a variação não passou de X%. (preencha com o seu resultado)
+-- Grão: uma única linha.
+CREATE OR REPLACE VIEW vw_mes_referencia AS 
+WITH analise AS (
+SELECT ano_mes, COUNT(DISTINCT cnpj) as operadoras
+FROM fato_acessos
+WHERE tipo_produto = 'INTERNET' 
+GROUP BY ano_mes
+),
+calc_media AS(
+SELECT ano_mes, operadoras, 
+AVG(operadoras) OVER (ORDER BY ano_mes ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING) AS media_3_meses
+FROM analise
+)
+SELECT ano_mes AS mes_referencia, 
+operadoras,
+ROUND(media_3_meses, 2) AS media_3_meses,
+ROUND(operadoras / media_3_meses * 100, 2) AS percentual
+FROM calc_media
+WHERE operadoras >= media_3_meses * 0.95 AND media_3_meses IS NOT NULL
+ORDER BY ano_mes DESC
+LIMIT 1;
+
 -- 5. vw_municipio_resumo
 -- Mercado de Banda Larga em cada município no último mês
 -- Grão: Uma linha por município (Apenas último mês disponível)
 CREATE OR REPLACE VIEW vw_municipio_resumo AS
 WITH ultimo_mes AS (
-SELECT MAX(ano_mes) AS ano_mes
-FROM fato_acessos
+SELECT mes_referencia AS ano_mes
+FROM vw_mes_referencia
 ),
 operadoras_mun AS (
 SELECT f.cod_ibge, 
@@ -137,8 +163,8 @@ WHERE c.posicao = 1;
 -- Grão: Cada linha um município que possui starlink
 CREATE OR REPLACE VIEW vw_starlink_municipio AS
 WITH ultimo_mes AS (
-SELECT MAX(ano_mes) AS ano_mes
-FROM fato_acessos
+SELECT mes_referencia AS ano_mes
+FROM vw_mes_referencia
 ),
 operadoras_mun AS (
 SELECT f.cod_ibge, 

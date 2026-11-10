@@ -174,13 +174,14 @@ LIMIT 10;
 -- =========================================================
 
 -- 5.1 Todos os municípios e reconciliação com o total do estado
--- Esperado: 102 municípios | 382.217 acessos
+-- Esperado: 102 municípios | 430.365 acessos
 SELECT COUNT(*)               AS municipios,
        SUM(acessos_municipio) AS total_estado
 FROM vw_municipio_resumo;
 
 -- 5.2 HHI máximo (10.000) só onde há uma única operadora
--- Esperado: em todas as linhas, operadoras = 1 e hhi = 10000 ao mesmo tempo
+-- Esperado: vazio (nenhum município com operadora única em ago/2026),
+-- ou linhas com operadoras = 1 e hhi = 10000 ao mesmo tempo
 SELECT municipio, operadoras, hhi
 FROM vw_municipio_resumo
 WHERE hhi = 10000 OR operadoras = 1;
@@ -211,8 +212,8 @@ WHERE s.cod_ibge IS NULL
 ORDER BY m.municipio;
 
 -- 6.3 Teste da hipótese: Starlink x fibra por quartil
--- Esperado: quartil 1 com Starlink ~19,8% e fibra ~54,9%
---           quartis 2 a 4 com Starlink abaixo de 3% e fibra acima de 87%
+-- Esperado: quartil 1 com Starlink ~14,62% e fibra ~68,56%
+--           quartis 2 a 4 com Starlink abaixo de 1% e fibra acima de 90%
 WITH ranqueado AS (
     SELECT *,
            NTILE(4) OVER (ORDER BY participacao_starlink_pct DESC) AS quartil
