@@ -1,4 +1,4 @@
-#Etapa 1 do pipeline: Baixa e descompacta a base de banda larga fixa da Anatel
+"""Etapa 1 do pipeline: baixa e descompacta a base de banda larga fixa da Anatel."""
 
 import logging
 import zipfile
@@ -15,10 +15,10 @@ EXTRACT_DIR = RAW_DIR / "acessos_banda_larga_fixa"
 
 log = logging.getLogger(__name__)
 
-def baixar(forcar:bool = False) -> Path:
-    # Baixa o .zip da Anatel se ainda não existir
+def baixar(forcar: bool = False) -> Path:
+    """Baixa o .zip da Anatel. Se já existir, não baixa de novo (a menos que forcar=True)."""
     RAW_DIR.mkdir(parents=True, exist_ok=True)
-    if ZIP_PATH. exists() and not forcar:
+    if ZIP_PATH.exists() and not forcar:
         log.info("Zip já existe, pulando download: %s", ZIP_PATH.name)
         return ZIP_PATH
     

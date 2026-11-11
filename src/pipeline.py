@@ -1,9 +1,5 @@
 """Pipeline completo: extract -> transform -> load.
 
-Uso (na raiz do projeto):  python -m src.pipeline
-"""
-"""Pipeline completo: extract -> transform -> load.
-
 Uso (na raiz do projeto):
     python -m src.pipeline             # reaproveita o transform salvo, se existir
     python -m src.pipeline --refazer   # reprocessa os CSVs do zero

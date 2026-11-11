@@ -4,6 +4,7 @@
 **Formato:** CSV, separador `;`, encoding UTF-8 (com BOM), decimal com vírgula
 **Arquivos:** um por ano a partir de 2021 (`Acessos_Banda_Larga_Fixa_AAAA.csv`); antes de 2021, agrupados em biênios
 **Recorte do projeto:** UF = AL, de jan/2021 a set/2026
+**Mês de referência:** o último mês com dados completos (hoje, ago/2026), definido pela view `vw_mes_referencia`
 
 | Coluna | Tipo | Descrição | Exemplo |
 | --- | --- | --- | --- |
@@ -29,3 +30,6 @@
 - Antes de 2021 a base tem 13 colunas e outra metodologia; o projeto começa em 2021.
 - Algumas prestadoras reportam de forma intermitente (aparecem em alguns meses e somem em outros).
 - O zip também traz `Densidade_Banda_Larga_Fixa.csv` (acessos por 100 habitantes, por município).
+- O mês mais recente costuma vir incompleto: parte das operadoras reporta com atraso. Em set/2026 faltavam 25 operadoras (cerca de 48 mil acessos), por isso os retratos usam o mês de referência.
+- Uma mesma empresa pode ter mais de um CNPJ (ex.: Claro). As análises por CNPJ mostram o grupo dividido.
+- “Pequeno Porte” é a classificação regulatória da Anatel (PPP: menos de 5% de participação nacional) e inclui operadoras grandes no estado, como a Brisanet.
