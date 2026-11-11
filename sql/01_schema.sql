@@ -1,10 +1,11 @@
 -- =========================================================
 -- Esquema do banco banda_larga_al (esquema estrela)
 -- Recria as tabelas do zero: o pipeline recarrega tudo a cada execução.
+-- Executar conectado ao banco definido em DB_NAME (.env). O pipeline já conecta
+-- nele. No Navicat, selecione o banco antes de rodar o script.
 -- =========================================================
-USE banda_larga_al;
 
--- A Fato sai primeiro, porque depende das dimensões (chaves estrangeiras)
+-- A fato sai primeiro, porque depende das dimensões (chaves estrangeiras)
 DROP TABLE IF EXISTS fato_acessos;
 DROP TABLE IF EXISTS dim_operadora;
 DROP TABLE IF EXISTS dim_municipio;

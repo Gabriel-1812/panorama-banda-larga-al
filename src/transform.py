@@ -1,4 +1,4 @@
-#Etapa 2 do pipeline: lê os CSVs da Anatel, filtra Alagoas e monta as tabelas.
+"""Etapa 2 do pipeline: lê os CSVs da Anatel, filtra Alagoas e monta as tabelas."""
 
 import logging
 from pathlib import Path
@@ -8,8 +8,8 @@ from src.extract import EXTRACT_DIR
 log = logging.getLogger(__name__)
 
 UF = "AL"
-ANO_INICIAL = 2021
-TAMANHO_CHUNK = 500000
+ANO_INICIAL = 2021          # antes de 2021 a metodologia e as colunas eram outras
+TAMANHO_CHUNK = 500_000
 
 RENOMEAR = {
     "Ano": "ano",
@@ -43,12 +43,11 @@ DIMENSOES_FATO = [
 
 
 def listar_arquivos() -> list[Path]:
-    #Seleciona só os arquivos anuais a partir de ANO_INICIAL.
-    
+    """Seleciona só os arquivos anuais a partir de ANO_INICIAL."""
     arquivos = []
     for caminho in sorted(EXTRACT_DIR.glob("Acessos_Banda_Larga_Fixa_*.csv")):
         sufixo = caminho.stem.removeprefix("Acessos_Banda_Larga_Fixa_")
-
+        # "2023" passa; "2021_Colunas", "2007-2010" e "Total" ficam de fora
         if sufixo.isdigit() and int(sufixo) >= ANO_INICIAL:
             arquivos.append(caminho)
     return arquivos
@@ -67,8 +66,7 @@ def ler_alagoas(caminho: Path) -> pd.DataFrame:
 
 
 def padronizar(df: pd.DataFrame) -> pd.DataFrame:
-
-    #Renomeia colunas, limpa textos e converte os tipos.
+    """Renomeia colunas, limpa textos e converte os tipos."""
     df = df.rename(columns=RENOMEAR)
 
     for coluna in COLUNAS_TEXTO:
@@ -94,8 +92,7 @@ def padronizar(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def validar(df: pd.DataFrame) -> pd.DataFrame:
-
-    #Checagens de qualidade: registra problemas no log e remove linhas inválidas.
+    """Checagens de qualidade: registra problemas no log e remove linhas inválidas."""
     obrigatorias = ["ano_mes", "cnpj", "cod_ibge", "acessos"]
     vazias = df[obrigatorias].isna().any(axis=1)
     if vazias.any():
@@ -114,8 +111,9 @@ def validar(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def montar_tabelas(df: pd.DataFrame) -> dict[str, pd.DataFrame]:
-    #Separa os dados em duas dimensões e uma fato (esquema estrela).
-    # Ordena do mais recente para o mais antigo: se um nome mudou ao longo do tempo, a dimensão fica com a versão mais atual
+    """Separa os dados em duas dimensões e uma fato (esquema estrela)."""
+    # Ordena do mais recente para o mais antigo: se um nome ou porte mudou ao longo
+    # do tempo, a dimensão fica com a versão mais atual (SCD Tipo 1)
     recente = df.sort_values("ano_mes", ascending=False)
 
     dim_municipio = (recente[["cod_ibge", "municipio", "uf"]]
@@ -137,6 +135,7 @@ def montar_tabelas(df: pd.DataFrame) -> dict[str, pd.DataFrame]:
 
 
 def transformar() -> dict[str, pd.DataFrame]:
+    """Executa a etapa completa: seleção, leitura, padronização, validação e modelagem."""
     arquivos = listar_arquivos()
     if not arquivos:
         raise FileNotFoundError("Nenhum CSV encontrado. Rode a extração antes.")
@@ -144,12 +143,3 @@ def transformar() -> dict[str, pd.DataFrame]:
 
     brutos = pd.concat([ler_alagoas(a) for a in arquivos], ignore_index=True)
     return montar_tabelas(validar(padronizar(brutos)))
-
-
-
-
-
-
-
-
-

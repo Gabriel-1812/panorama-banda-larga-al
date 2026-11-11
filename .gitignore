@@ -7,9 +7,9 @@
 # Dados brutos e processados (grandes, o pipeline baixa)
 data/
 
-# Power BI (versão privada do estudo Aloo)
+# Power BI e materiais pessoais (fora do repositório público)
 *.pbix
-notebooks/privado
+notebooks/privado/
 
 # Python
 __pycache__/

@@ -96,10 +96,18 @@ fibra = (tecnologia[tecnologia["meio_acesso"] == "Fibra"]
 # =========================================================
 st.sidebar.header("Filtros")
 st.sidebar.caption("Valem para a aba **Evolução do mercado**. "
-                   "A aba de municípios mostra sempre o último mês.")
+                   "A aba de municípios mostra sempre o mês de referência "
+                   "(o último mês com dados completos).")
 
 inicio, fim = st.sidebar.select_slider(
     "Período", options=meses, value=(meses[0], ultimo_mes), format_func=mes)
+
+# Meses depois do mês de referência estão incompletos (operadoras que ainda não reportaram)
+if fim > ultimo_mes:
+    st.sidebar.warning(
+        f"Meses depois de {mes(ultimo_mes)} são preliminares: parte das operadoras "
+        "ainda não havia reportado quando os dados foram publicados."
+    )
 
 # Operadoras do último mês do período, da maior para a menor
 no_fim = mercado[mercado["ano_mes"] == fim].sort_values("ranking").copy()
@@ -264,7 +272,7 @@ with aba_mercado:
     fig.update_traces(line_color=COR_DESTAQUE, hovertemplate="%{y:.2f}%")
     g2.plotly_chart(estilo(fig, altura=300), width="stretch")
 
-    # A pegadinha do Card 4, agora visível para quem usa o dashboard
+    # O LAG da view pega o registro anterior que existe: os meses sem reporte ficam visíveis aqui
     meses_sem_reporte = int((op["meses_ultima_aparicao"] - 1).clip(lower=0).sum())
     if meses_sem_reporte:
         st.warning(
@@ -277,7 +285,8 @@ with aba_mercado:
 # ABA 2: Retrato dos municípios (último mês, sem filtros)
 # =========================================================
 with aba_municipios:
-    st.caption(f"Retrato de {mes(ultimo_mes)}, o último mês disponível. Esta aba não depende de filtros.")
+    st.caption(f"Retrato de {mes(ultimo_mes)}, o último mês com dados completos. "
+               "Esta aba não depende dos filtros.")
 
     # ---------- 1. Os municípios ----------
     st.subheader("1. Concorrência e fibra em cada município")
@@ -364,7 +373,8 @@ with aba_municipios:
 
     st.caption(
         "Cada ponto é um município. A Starlink só ganha participação relevante onde há pouca "
-        "fibra: o padrão se mantém dividindo os municípios em 4, 5 ou 6 grupos."
+        "fibra. A linha pontilhada é a participação da fibra no estado. Associação não é "
+        "causa: municípios rurais tendem a ter, ao mesmo tempo, menos fibra e mais satélite."
     )
 
     st.markdown(f"**Os {n_quartil} municípios onde a Starlink é mais forte**")
@@ -390,6 +400,7 @@ st.divider()
 st.caption(
     "**Limitações.** Os dados são os acessos reportados pelas operadoras à Anatel: "
     "algumas reportam de forma intermitente, e há subnotificação, principalmente entre "
-    "pequenos provedores. As análises consideram apenas o produto INTERNET e o período "
-    "de jan/2021 em diante, após a mudança de metodologia da Anatel."
+    "pequenos provedores. O mês mais recente costuma vir incompleto, por isso os retratos "
+    "usam o último mês com dados completos. As análises consideram apenas o produto INTERNET "
+    "e o período de jan/2021 em diante, após a mudança de metodologia da Anatel."
 )
