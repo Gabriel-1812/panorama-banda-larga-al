@@ -5,6 +5,8 @@
 --   vw_operadora_destaque  depende de  vw_market_share
 --   vw_municipio_resumo    depende de  vw_mes_referencia
 --   vw_starlink_municipio  depende de  vw_mes_referencia
+--   vw_crescimento_municipio depende de vw_mes_referencia
+--   vw_qualidade_reporte   depende de  vw_operadora_destaque e vw_mes_referencia
 -- Regras gerais:
 --   R1. Análises de mercado usam só tipo_produto = 'INTERNET' (exceto vw_linha_dedicada).
 --   R2. Nunca somar acessos entre meses diferentes (acessos é um estoque mensal).
@@ -325,3 +327,115 @@ SELECT t.cod_ibge,
 FROM totais t
 JOIN dim_municipio m ON m.cod_ibge = t.cod_ibge
 WHERE t.cnpj = '40154884000153';
+
+-- ---------------------------------------------------------
+-- 10. vw_crescimento_municipio
+-- Pergunta: onde o mercado (INTERNET) mais cresceu nos últimos 12 meses?
+-- Grão: uma linha por município.
+-- Compara o mês de referência com o mesmo mês do ano anterior.
+-- Decisões:
+--   "12 meses atrás" é uma DATA calculada (DATE_SUB), não LAG: com dados por
+--   município e operadora, 12 linhas antes não são 12 meses antes.
+--   Os dois meses ficam lado a lado na mesma linha por agregação condicional.
+--   Sem acessos 12 meses atrás, as variações percentuais ficam NULL (NULLIF evita
+--   divisão por zero).
+--   A view entrega todos os municípios. O corte mínimo de acessos para rankings
+--   fica para quem consulta (ver validações 12.4 e 12.6).
+-- ---------------------------------------------------------
+CREATE OR REPLACE VIEW vw_crescimento_municipio AS
+WITH meses AS (
+    SELECT mes_referencia                              AS mes_atual,
+           DATE_SUB(mes_referencia, INTERVAL 12 MONTH) AS mes_12m_atras
+    FROM vw_mes_referencia
+),
+acessos AS (
+    SELECT f.cod_ibge,
+           SUM(CASE WHEN f.ano_mes = m.mes_atual     THEN f.acessos ELSE 0 END) AS acessos_atual,
+           SUM(CASE WHEN f.ano_mes = m.mes_12m_atras THEN f.acessos ELSE 0 END) AS acessos_12m_atras,
+           SUM(CASE WHEN f.ano_mes = m.mes_atual
+                     AND f.meio_acesso = 'Fibra'     THEN f.acessos ELSE 0 END) AS fibra_atual,
+           SUM(CASE WHEN f.ano_mes = m.mes_12m_atras
+                     AND f.meio_acesso = 'Fibra'     THEN f.acessos ELSE 0 END) AS fibra_12m_atras
+    FROM fato_acessos f
+    JOIN meses m ON f.ano_mes IN (m.mes_atual, m.mes_12m_atras)
+    WHERE f.tipo_produto = 'INTERNET'
+    GROUP BY f.cod_ibge
+),
+percentuais AS (
+    SELECT cod_ibge,
+           acessos_atual,
+           acessos_12m_atras,
+           fibra_atual       / NULLIF(acessos_atual, 0)     * 100 AS fibra_pct_atual,
+           fibra_12m_atras   / NULLIF(acessos_12m_atras, 0) * 100 AS fibra_pct_12m_atras
+    FROM acessos
+)
+SELECT p.cod_ibge,
+       mu.municipio,
+       p.acessos_atual,
+       p.acessos_12m_atras,
+       p.acessos_atual - p.acessos_12m_atras                                             AS var_abs_12m,
+       ROUND((p.acessos_atual - p.acessos_12m_atras) / NULLIF(p.acessos_12m_atras, 0) * 100, 2) AS var_pct_12m,
+       ROUND(p.fibra_pct_atual, 2)                                                       AS fibra_pct_atual,
+       ROUND(p.fibra_pct_12m_atras, 2)                                                   AS fibra_pct_12m_atras,
+       ROUND(p.fibra_pct_atual - p.fibra_pct_12m_atras, 2)                               AS var_fibra_pp
+FROM percentuais p
+JOIN dim_municipio mu ON mu.cod_ibge = p.cod_ibge;
+
+
+-- =========================================================
+-- BLOCO C: qualidade dos dados
+-- =========================================================
+
+-- ---------------------------------------------------------
+-- 11. vw_qualidade_reporte
+-- Pergunta: quais operadoras reportam de forma regular, intermitente ou pararam de reportar?
+-- Grão: uma linha por operadora (CNPJ) com acessos de INTERNET até o mês de referência.
+-- Decisões:
+--   Usa só os meses até o mês de referência. Operadoras que faltaram apenas no mês
+--   preliminar atrasaram o reporte, não pararam.
+--   Situação, em ordem de prioridade: "parou de reportar" (último registro anterior
+--   ao mês de referência), "intermitente" (meses faltando no intervalo) e "regular".
+--   Uma operadora com buracos que também parou fica como "parou de reportar".
+--   maior_intervalo = maior sequência de meses sem reporte (0 sem buracos). Fica NULL
+--   para quem reportou uma única vez, porque não há intervalo para medir.
+-- Interpretação: "parou de reportar" não é o mesmo que subnotificação. Inclui
+--   operadoras que encerraram as atividades, foram adquiridas ou mudaram de CNPJ.
+-- Escopo: só INTERNET. Operadoras apenas com linha dedicada não entram.
+-- ---------------------------------------------------------
+CREATE OR REPLACE VIEW vw_qualidade_reporte AS
+WITH ate_referencia AS (
+    SELECT op.*,
+           r.mes_referencia
+    FROM vw_operadora_destaque op
+    CROSS JOIN vw_mes_referencia r
+    WHERE op.ano_mes <= r.mes_referencia
+),
+calc_mes AS (
+    SELECT cnpj,
+           empresa,
+           grupo_economico,
+           mes_referencia,
+           MIN(ano_mes)                                                       AS primeiro_mes,
+           MAX(ano_mes)                                                       AS ultimo_mes,
+           COUNT(*)                                                           AS meses_com_dados,
+           TIMESTAMPDIFF(MONTH, MIN(ano_mes), MAX(ano_mes)) + 1               AS meses_no_intervalo,
+           TIMESTAMPDIFF(MONTH, MIN(ano_mes), MAX(ano_mes)) + 1 - COUNT(*)    AS meses_faltando,
+           MAX(meses_ultima_aparicao) - 1                                     AS maior_intervalo
+    FROM ate_referencia
+    GROUP BY cnpj, empresa, grupo_economico, mes_referencia
+)
+SELECT cnpj,
+       empresa,
+       grupo_economico,
+       mes_referencia,
+       primeiro_mes,
+       ultimo_mes,
+       meses_com_dados,
+       meses_no_intervalo,
+       meses_faltando,
+       maior_intervalo,
+       CASE WHEN ultimo_mes < mes_referencia THEN 'parou de reportar'
+            WHEN meses_faltando = 0          THEN 'regular'
+            ELSE 'intermitente'
+       END AS situacao
+FROM calc_mes;

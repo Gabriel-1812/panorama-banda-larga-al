@@ -272,6 +272,30 @@ FROM ranqueado
 GROUP BY quartil
 ORDER BY quartil;
 
+-- 6.4 Robustez: o padrão se mantém com 5 e 6 grupos? (troque NTILE(5) por NTILE(6))
+-- Critério, definido antes de olhar: em todas as divisões, o grupo 1 tem a MAIOR
+-- participação da Starlink e a MENOR fibra.
+-- Esperado com 5 grupos: grupo 1 = 20 municípios | Starlink 17,31 | fibra 62,96
+--                        demais grupos com Starlink abaixo de 2,5 e fibra acima de 89
+-- Esperado com 6 grupos: grupo 1 = 17 municípios | Starlink 19,38 | fibra 59,31
+--                        demais grupos com Starlink abaixo de 3,4 e fibra acima de 89
+-- Resultado: o padrão se mantém com 4, 5 e 6 grupos. Quanto menor o grupo 1, mais
+-- extremo ele fica. Fora do grupo 1, a fibra fica sempre perto de 90%: a relação é de
+-- limiar (a Starlink só pesa onde a fibra é baixa), não uma reta.
+WITH ranqueado AS (
+    SELECT participacao_starlink_pct,
+           fibra_pct,
+           NTILE(5) OVER (ORDER BY participacao_starlink_pct DESC) AS grupo
+    FROM vw_starlink_municipio
+)
+SELECT grupo,
+       COUNT(*)                                 AS municipios,
+       ROUND(AVG(participacao_starlink_pct), 2) AS starlink_media_pct,
+       ROUND(AVG(fibra_pct), 2)                 AS fibra_media_pct
+FROM ranqueado
+GROUP BY grupo
+ORDER BY grupo;
+
 
 -- =========================================================
 -- 7. QUALIDADE DO REPORTE
@@ -445,3 +469,148 @@ GROUP BY cnpj, empresa
 HAVING meses_com_dados < meses_no_intervalo
 ORDER BY meses_no_intervalo - meses_com_dados DESC
 LIMIT 10;
+
+-- =========================================================
+-- 11. vw_qualidade_reporte
+-- =========================================================
+
+-- 11.1 Uma linha por operadora com registro de INTERNET até o mês de referência
+-- Esperado: 535 | 535
+SELECT (SELECT COUNT(*) FROM vw_qualidade_reporte) AS linhas_view,
+       (SELECT COUNT(DISTINCT ms.cnpj)
+        FROM vw_market_share ms
+        JOIN vw_mes_referencia r ON ms.ano_mes <= r.mes_referencia) AS cnpjs_ate_referencia;
+
+-- 11.2 Contagem por situação
+-- Esperado: regular = 183 | intermitente = 137 | parou de reportar = 215
+SELECT situacao,
+       COUNT(*)                                           AS operadoras,
+       ROUND(COUNT(*) / SUM(COUNT(*)) OVER () * 100, 1)   AS pct
+FROM vw_qualidade_reporte
+GROUP BY situacao
+ORDER BY operadoras DESC;
+
+-- 11.3 Operadoras ativas = operadoras do mês de referência
+-- Esperado: 320 | 320 (regulares + intermitentes têm o último registro no mês de referência)
+SELECT (SELECT COUNT(*)
+        FROM vw_qualidade_reporte
+        WHERE situacao IN ('regular', 'intermitente')) AS ativas_na_view,
+       (SELECT operadoras FROM vw_mes_referencia)      AS operadoras_mes_referencia;
+
+-- 11.4 Coerência das regras: cada situação respeita a sua definição
+-- Esperado: nenhuma linha
+SELECT cnpj, empresa, ultimo_mes, mes_referencia, meses_faltando, situacao
+FROM vw_qualidade_reporte
+WHERE (situacao = 'parou de reportar' AND ultimo_mes >= mes_referencia)
+   OR (situacao = 'intermitente'      AND (meses_faltando = 0 OR ultimo_mes < mes_referencia))
+   OR (situacao = 'regular'           AND (meses_faltando > 0 OR ultimo_mes < mes_referencia))
+   OR meses_faltando < 0;
+
+-- 11.5 Operadora estável: os dois CNPJs da Claro
+-- Esperado: 2 linhas, ambas "regular"
+SELECT cnpj, empresa, primeiro_mes, ultimo_mes, meses_com_dados, situacao
+FROM vw_qualidade_reporte
+WHERE empresa LIKE 'CLARO%';
+
+-- 11.6 Os maiores buracos de reporte
+-- Esperado: o primeiro com maior_intervalo acima de 40 meses, como "intermitente"
+SELECT cnpj, empresa, primeiro_mes, ultimo_mes, meses_faltando, maior_intervalo, situacao
+FROM vw_qualidade_reporte
+ORDER BY maior_intervalo DESC
+LIMIT 5;
+
+-- 11.7 Quem só faltou no mês preliminar não "parou de reportar"
+-- Esperado: Tb Telecom e Rupi Telecom ativas (regular ou intermitente), com último mês = mês de referência
+SELECT empresa, ultimo_mes, mes_referencia, situacao
+FROM vw_qualidade_reporte
+WHERE empresa LIKE 'Tb Telecom%'
+   OR empresa LIKE 'Rupi Telecom%';
+
+-- =========================================================
+-- 12. vw_crescimento_municipio
+-- =========================================================
+
+-- 12.1 Uma linha por município
+-- Esperado: 102
+SELECT COUNT(*) AS municipios FROM vw_crescimento_municipio;
+
+-- 12.2 Reconciliação com o total do estado nos dois meses
+-- Esperado: acessos_atual = 430.365 e acessos_12m_atras = total de ago/2025 na vw_evolucao_mensal
+--           crescimento calculado pelas somas = 20,46 (o mesmo da vw_evolucao_mensal)
+SELECT SUM(c.acessos_atual)                                        AS soma_atual,
+       SUM(c.acessos_12m_atras)                                    AS soma_12m_atras,
+       (SELECT ev.total_acessos
+        FROM vw_evolucao_mensal ev
+        JOIN vw_mes_referencia r
+          ON ev.ano_mes = DATE_SUB(r.mes_referencia, INTERVAL 12 MONTH)) AS evolucao_12m_atras,
+       ROUND((SUM(c.acessos_atual) / SUM(c.acessos_12m_atras) - 1) * 100, 2) AS crescimento_estado
+FROM vw_crescimento_municipio c;
+
+-- 12.3 Nenhum percentual calculado sobre base zero
+-- Esperado: nenhuma linha
+SELECT municipio, acessos_12m_atras, var_pct_12m
+FROM vw_crescimento_municipio
+WHERE acessos_12m_atras = 0 AND var_pct_12m IS NOT NULL;
+
+-- 12.4 Os 10 que mais cresceram, acima do corte mínimo
+-- Corte: pelo menos 500 acessos 12 meses atrás. Vem do 12.6: o quartil dos menores
+--        municípios vai de 10 a 463 acessos. A base do percentual é o mês de 12 meses
+--        atrás, então o corte é aplicado nela.
+-- Esperado (município | 12m atrás | atual | var % | fibra % | var fibra p.p.):
+--   Batalha         |   501 | 2.024 | 303,99 | 97,63 |   7,21
+--   Igaci           | 1.285 | 4.791 | 272,84 | 93,20 |   3,93
+--   São Sebastião   |   684 | 2.494 | 264,62 | 98,40 |   8,05
+--   Campo Alegre    |   643 | 1.959 | 204,67 | 98,83 |  21,22
+--   Cacimbinhas     |   527 | 1.302 | 147,06 | 80,49 |   5,54
+--   Murici          |   780 | 1.879 | 140,90 | 94,25 |   9,51
+--   Teotônio Vilela | 1.798 | 3.642 | 102,56 | 35,12 | -15,44
+--   (seguem Santa Luzia do Norte, Major Isidoro e Canapi)
+-- Atenção: crescimentos acima de 100% em 12 meses podem vir de operadoras que
+--          passaram a reportar no período, e não só de clientes novos.
+SELECT municipio, acessos_12m_atras, acessos_atual, var_pct_12m, fibra_pct_atual, var_fibra_pp
+FROM vw_crescimento_municipio
+WHERE acessos_12m_atras >= 500
+ORDER BY var_pct_12m DESC
+LIMIT 10;
+
+-- 12.5 Cruzamento com as lacunas de fibra: os que mais cresceram estão entre os 25 da Starlink?
+-- Esperado: nenhum dos 10 (todos "não"). O crescimento acontece onde a fibra já
+--           domina, e não nas lacunas de fibra. Exceção: Teotônio Vilela dobrou de
+--           tamanho com só 35% de fibra, que ainda caiu 15 p.p. no período.
+WITH topo_starlink AS (
+    SELECT cod_ibge
+    FROM vw_starlink_municipio
+    ORDER BY participacao_starlink_pct DESC
+    LIMIT 25
+)
+SELECT c.municipio,
+       c.var_pct_12m,
+       c.fibra_pct_atual,
+       CASE WHEN t.cod_ibge IS NOT NULL THEN 'sim' ELSE 'não' END AS entre_os_25_da_starlink
+FROM vw_crescimento_municipio c
+LEFT JOIN topo_starlink t ON t.cod_ibge = c.cod_ibge
+WHERE c.acessos_12m_atras >= 500   -- mesmo corte do 12.4
+ORDER BY c.var_pct_12m DESC
+LIMIT 10;
+
+-- 12.6 Distribuição do tamanho dos municípios (base para escolher o corte do 12.4)
+-- Uso: o corte é o "maior" do quartil 1, arredondado, para tirar do ranking
+--      os municípios pequenos, onde poucos acessos geram percentuais enormes.
+-- Esperado (quartil | municípios | menor | maior):
+--   1 | 26 |    10 |     463
+--   2 | 26 |   493 |   1.092
+--   3 | 25 | 1.120 |   2.024
+--   4 | 25 | 2.057 | 221.538
+-- Corte escolhido: 500 acessos.
+WITH q AS (
+    SELECT acessos_atual,
+           NTILE(4) OVER (ORDER BY acessos_atual) AS quartil
+    FROM vw_crescimento_municipio
+)
+SELECT quartil,
+       COUNT(*)           AS municipios,
+       MIN(acessos_atual) AS menor,
+       MAX(acessos_atual) AS maior
+FROM q
+GROUP BY quartil
+ORDER BY quartil;

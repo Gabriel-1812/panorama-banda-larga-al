@@ -373,8 +373,9 @@ with aba_municipios:
 
     st.caption(
         "Cada ponto é um município. A Starlink só ganha participação relevante onde há pouca "
-        "fibra. A linha pontilhada é a participação da fibra no estado. Associação não é "
-        "causa: municípios rurais tendem a ter, ao mesmo tempo, menos fibra e mais satélite."
+        "fibra, e o padrão se mantém dividindo os municípios em 4, 5 ou 6 grupos. A linha "
+        "pontilhada é a participação da fibra no estado. Associação não é causa: municípios "
+        "rurais tendem a ter, ao mesmo tempo, menos fibra e mais satélite."
     )
 
     st.markdown(f"**Os {n_quartil} municípios onde a Starlink é mais forte**")
