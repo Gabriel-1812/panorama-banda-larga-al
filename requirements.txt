@@ -1,9 +1,17 @@
-pandas
-sqlalchemy
-pymysql
-cryptography
-python-dotenv
-requests
-streamlit
-plotly
-jupyter
+# Testado com Python 3.14 (deve funcionar a partir do 3.11)
+# Versões fixas para o projeto rodar igual em qualquer máquina.
+
+# Pipeline (extração, transformação e carga)
+pandas==3.1.0
+SQLAlchemy==2.1.6
+PyMySQL==1.2.3
+cryptography==50.0.2
+python-dotenv==1.2.4
+requests==2.34.2
+
+# Dashboard
+streamlit==1.66.1
+plotly==7.1.0
+
+# Notebook de exploração
+jupyter==1.1.1
