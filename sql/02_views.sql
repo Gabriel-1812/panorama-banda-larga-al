@@ -200,7 +200,7 @@ JOIN dim_operadora op ON op.cnpj = am.cnpj;
 --        menos 95% da média dos 3 meses anteriores. O mês mais recente da base
 --        costuma vir incompleto porque parte das operadoras reporta com atraso.
 -- Justificativa do limite: a validação 10.3 lista os meses barrados pela regra.
---        Com a base atual, só set/2026 é barrado (cerca de 91,6% da média).
+--        No download de 16/11/2026, set/2026 é barrado (93,3% da média).
 -- Limitações: dois meses seguidos incompletos rebaixam a média de comparação, e
 --        os primeiros meses da série têm menos de 3 meses anteriores na média.
 -- Grão: uma única linha.

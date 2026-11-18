@@ -8,11 +8,11 @@ Pipeline de dados de ponta a ponta com os dados abertos da Anatel: extração e 
 
 Retrato de **ago/2026**, o último mês com dados completos (o motivo está em [Qualidade e validação](#qualidade-e-validação)).
 
-- **O mercado cresce rápido:** 430.365 acessos de internet fixa em ago/2026, **20,46% a mais** que em ago/2025, distribuídos entre 320 operadoras ativas.
-- **A fibra virou o padrão:** a participação da fibra passou de **24,68%** em jan/2021 para **83,90%** em ago/2026.
+- **O mercado cresce rápido:** 430.377 acessos de internet fixa em ago/2026, **20,47% a mais** que em ago/2025, distribuídos entre 321 operadoras ativas.
+- **A fibra virou o padrão:** a participação da fibra passou de **24,68%** em jan/2021 para **83,89%** em ago/2026.
 - **Liderança regional e mercado pulverizado:** a Brisanet lidera com 26,25% dos acessos, seguida pela Claro (19,49%). O restante está dividido entre centenas de operadoras, a maioria pequenos provedores.
 - **Maceió concentra metade do estado:** são 221.538 acessos (51,48% do total). Mesmo com 137 operadoras, o mercado da capital é concentrado (HHI de 2.622). O município mais competitivo é Arapiraca.
-- **A Starlink ocupa as lacunas da fibra:** ela está em 98 dos 102 municípios. Nos 25 municípios onde é mais forte, tem em média 14,62% do mercado, e a fibra fica em 68,56%, contra cerca de 91% nos demais. O padrão se mantém dividindo os municípios em 4, 5 ou 6 grupos: é uma relação de limiar, concentrada nos lugares com pouca fibra.
+- **A Starlink ocupa as lacunas da fibra:** ela está em 98 dos 102 municípios. Nos 25 municípios onde é mais forte, tem em média 14,62% do mercado, e a fibra fica em 68,54%, contra cerca de 91% nos demais. O padrão se mantém dividindo os municípios em 4, 5 ou 6 grupos: é uma relação de limiar, concentrada nos lugares com pouca fibra.
 - **O crescimento acontece onde a fibra já domina:** nenhum dos 10 municípios que mais cresceram em 12 meses está entre as lacunas de fibra.
 
 > Os números descrevem associações nos dados reportados, não causas. Veja as [limitações](#limitações).
@@ -92,13 +92,20 @@ pip install -r requirements.txt
 mysql -u root -p -e "source sql/00_criar_banco.sql"
 ```
 
-**5. Configurar a conexão.** Copie o modelo e preencha com o seu usuário e a sua senha do MySQL:
+**5. Configurar a conexão.** Copie o modelo e edite o `.env`:
 
 ```powershell
 Copy-Item .env.example .env
+notepad .env
 ```
 
-**6. Rodar o pipeline.** Na primeira vez ele baixa e processa todos os arquivos da Anatel, o que pode levar alguns minutos:
+Preencha o seu usuário e a sua senha do MySQL e confira o `DB_NAME`: ele precisa ser o nome do banco criado no passo 4 (`banda_larga_al`, se você não mudou o script). O pipeline apaga e recria as tabelas do banco indicado ali, então um `DB_NAME` errado sobrescreve outro banco. Salve o arquivo e confira:
+
+```powershell
+Select-String "DB_NAME" .env
+```
+
+**6. Rodar o pipeline.** Na primeira vez ele baixa e processa todos os arquivos da Anatel (cerca de 3 minutos numa conexão rápida):
 
 ```powershell
 python -m src.pipeline             # reaproveita o tratamento salvo, se existir
@@ -111,7 +118,11 @@ python -m src.pipeline --refazer   # reprocessa os CSVs do zero
 streamlit run app/app.py
 ```
 
-**8. (Opcional) Conferir os resultados.** Rode as consultas do `sql/03_validacoes.sql` no seu cliente MySQL. Cada teste traz, num comentário, o resultado esperado com a base atual.
+**8. (Opcional) Conferir os resultados.** Roda todos os testes do `sql/03_validacoes.sql` e salva um relatório em `data/`, com o resultado esperado e o obtido lado a lado:
+
+```powershell
+python -m src.validar
+```
 
 ## Estrutura de pastas
 
@@ -133,7 +144,8 @@ panorama-banda-larga-al/
 │   ├── extract.py             # download e extração do .zip
 │   ├── transform.py           # leitura, limpeza e montagem das tabelas
 │   ├── load.py                # criação das tabelas, carga e views
-│   └── pipeline.py            # orquestra as três etapas
+│   ├── pipeline.py            # orquestra as três etapas
+│   └── validar.py             # roda as validações e gera o relatório
 ├── .env.example               # modelo das variáveis de conexão
 └── requirements.txt           # dependências com versões fixas
 ```
@@ -209,25 +221,25 @@ Algumas técnicas usadas: funções de janela (`LAG`, `RANK`, `ROW_NUMBER`, `SUM
 
 O arquivo `sql/03_validacoes.sql` reúne os testes de cada view. Cada teste tem o resultado esperado escrito ao lado, então qualquer mudança no código que altere um número aparece na hora. Os principais tipos de teste:
 
-- **Reconciliação:** o total de cada view bate com o total do estado no mesmo mês (por exemplo, a soma dos 102 municípios dá os mesmos 430.365 acessos da evolução mensal).
+- **Reconciliação:** o total de cada view bate com o total do estado no mesmo mês (por exemplo, a soma dos 102 municípios dá os mesmos 430.377 acessos da evolução mensal).
 - **Prova dos 100%:** as participações de cada mês somam 100%, com diferença apenas de arredondamento.
 - **Integridade:** nenhuma linha da fato sem município ou sem operadora, e nenhum acesso negativo.
 - **Casos conhecidos:** uma operadora estável (a Claro) aparece sem buracos de reporte, e um município com uma única operadora teria HHI de 10.000.
 
 ### O mês de referência
 
-O mês mais recente da base costuma vir incompleto, porque parte das operadoras reporta com atraso. Em set/2026, por exemplo, faltavam operadoras que somavam cerca de 48 mil acessos, e o total parecia uma queda que não existiu.
+O mês mais recente da base costuma vir incompleto, porque parte das operadoras reporta com atraso. Em set/2026, por exemplo, ainda faltavam cerca de 20 operadoras, e o total parecia uma queda que não existiu. Isso se confirmou na prática: entre dois downloads feitos com duas semanas de diferença, a Anatel acrescentou cerca de 20 mil acessos a set/2026, enquanto ago/2026 mudou só 12 acessos.
 
 Por isso a view `vw_mes_referencia` escolhe o último mês em que o número de operadoras que reportaram é pelo menos **95% da média dos 3 meses anteriores**. Com a base atual, o mês escolhido é ago/2026. Os retratos do dashboard (municípios, Starlink, crescimento) usam esse mês automaticamente, e a regra se ajusta sozinha quando a Anatel publica dados novos.
 
 ### Qualidade do reporte
 
-Das 535 operadoras com algum registro de internet até ago/2026, 183 reportam todos os meses, 137 têm meses faltando e 215 deixaram de aparecer. Esse último grupo mistura empresas que encerraram as atividades, foram adquiridas ou mudaram de CNPJ, então não equivale a subnotificação.
+Das 535 operadoras com algum registro de internet até ago/2026, 184 reportam todos os meses, 137 têm meses faltando e 214 deixaram de aparecer. Esse último grupo mistura empresas que encerraram as atividades, foram adquiridas ou mudaram de CNPJ, então não equivale a subnotificação.
 
 ## Limitações
 
 - **Dados reportados:** os acessos são os que as operadoras informam à Anatel. Há reporte intermitente e subnotificação, principalmente entre pequenos provedores.
-- **Mês preliminar:** o último mês publicado costuma estar incompleto. As análises usam o mês de referência, mas o histórico até ele também pode ser revisado pela Anatel.
+- **Mês preliminar e revisões:** o último mês publicado costuma estar incompleto, por isso as análises usam o mês de referência. Além disso, a Anatel revisa meses passados quando operadoras reportam com atraso, então um novo download pode mudar levemente os números históricos.
 - **Porte atual:** a classificação de porte guarda só a situação mais recente de cada operadora, então os meses antigos usam o porte de hoje. "Pequeno porte" é a classificação regulatória da Anatel (menos de 5% do mercado nacional) e inclui operadoras grandes no estado, como a Brisanet.
 - **Uma empresa, vários CNPJs:** as análises são por CNPJ. Empresas como a Claro aparecem divididas, e a soma do grupo é um pouco maior que a de cada CNPJ.
 - **Crescimento percentual:** crescimentos acima de 100% em 12 meses podem vir de operadoras que passaram a reportar, e não só de clientes novos. Os rankings de crescimento usam um corte mínimo de 500 acessos para não destacar municípios muito pequenos.
@@ -242,6 +254,6 @@ Das 535 operadoras com algum registro de internet até ago/2026, 183 reportam to
 
 ## Fonte e autor
 
-**Dados:** [Anatel, dados abertos de acessos de banda larga fixa](https://www.anatel.gov.br/dadosabertos/paineis_de_dados/acessos/acessos_banda_larga_fixa.zip), recorte de Alagoas de jan/2021 a set/2026.
+**Dados:** [Anatel, dados abertos de acessos de banda larga fixa](https://www.anatel.gov.br/dadosabertos/paineis_de_dados/acessos/acessos_banda_larga_fixa.zip), recorte de Alagoas de jan/2021 a set/2026, baixados em 16/11/2026.
 
 **Autor:** Gabriel Frederico de Araujo · [LinkedIn](https://www.linkedin.com/in/gabriel-frederico-de-araujo-26053a385)

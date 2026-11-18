@@ -6,6 +6,8 @@
 -- Valores de referência desta versão:
 --   base de jan/2021 a set/2026 (69 meses)
 --   mês de referência = 2026-08-01 (set/2026 está incompleto, ver bloco 10)
+--   dados baixados da Anatel em 16/11/2026. A Anatel revisa meses passados: o
+--   download de 01/11 tinha 352 linhas a menos, quase todas de set/2026.
 -- Quando a base for atualizada, os valores mudam: rode tudo e atualize os comentários.
 --
 -- Convenções:
@@ -20,7 +22,7 @@ USE banda_larga_al;
 -- =========================================================
 
 -- 0.1 Tamanho das tabelas
--- Esperado: dim_municipio = 102 | dim_operadora = 555 | fato_acessos = 418.489
+-- Esperado: dim_municipio = 102 | dim_operadora = 555 | fato_acessos = 418.841
 SELECT 'dim_municipio' AS tabela, COUNT(*) AS linhas FROM dim_municipio
 UNION ALL SELECT 'dim_operadora', COUNT(*) FROM dim_operadora
 UNION ALL SELECT 'fato_acessos',  COUNT(*) FROM fato_acessos;
@@ -33,7 +35,8 @@ SELECT MIN(ano_mes)            AS primeiro_mes,
 FROM fato_acessos;
 
 -- 0.3 Reconciliação com a exploração (notebook): todos os produtos, último mês da base
--- Esperado: 387.165
+-- Esperado: 407.837 (o notebook mostra 387.165: é do download de 01/11, antes
+--           de operadoras atrasadas, como a Rupi Telecom, completarem set/2026)
 SELECT SUM(acessos) AS total_ultimo_mes
 FROM fato_acessos
 WHERE ano_mes = (SELECT MAX(ano_mes) FROM fato_acessos);
@@ -70,7 +73,7 @@ SELECT SUM(var_pct_mensal IS NULL) AS nulos_mensal,
 FROM vw_evolucao_mensal;
 
 -- 1.3 Total de INTERNET no mês de referência
--- Esperado: 2026-08-01 | 430.365 | 20,46
+-- Esperado: 2026-08-01 | 430.377 | 20,47
 SELECT ev.ano_mes, ev.total_acessos, ev.var_pct_12m
 FROM vw_evolucao_mensal ev
 JOIN vw_mes_referencia r ON r.mes_referencia = ev.ano_mes;
@@ -153,7 +156,7 @@ GROUP BY t.ano_mes, ev.total_acessos
 HAVING soma_meios <> ev.total_acessos;
 
 -- 3.4 KPI da fibra: primeiro mês da série e mês de referência
--- Esperado: 2021-01-01 | 24,68 e 2026-08-01 | 83,90
+-- Esperado: 2021-01-01 | 24,68 e 2026-08-01 | 83,89
 SELECT t.ano_mes, t.participacao_pct AS fibra_pct
 FROM vw_tecnologia t
 WHERE t.meio_acesso = 'Fibra'
@@ -182,7 +185,7 @@ WHERE empresa LIKE 'CLARO%'
 GROUP BY cnpj, empresa;
 
 -- 4.3 Buracos de reporte: os maiores intervalos entre dois registros
--- Esperado: lista não vazia, com um intervalo de 40 e poucos meses entre os primeiros
+-- Esperado: lista não vazia, com Mhnet Telecom em primeiro (58 meses entre dois registros)
 SELECT empresa,
        cnpj,
        ano_mes,
@@ -206,7 +209,7 @@ WHERE od.meses_ultima_aparicao IS NOT NULL OR od.var_pct_anterior IS NOT NULL;
 -- =========================================================
 
 -- 5.1 Todos os municípios e reconciliação com o total do estado
--- Esperado: 102 municípios | 430.365 acessos
+-- Esperado: 102 municípios | 430.377 acessos
 SELECT COUNT(*)               AS municipios,
        SUM(acessos_municipio) AS total_estado
 FROM vw_municipio_resumo;
@@ -253,9 +256,9 @@ ORDER BY m.municipio;
 
 -- 6.3 Teste da hipótese: Starlink x fibra por quartil
 -- Esperado (quartil | municípios | Starlink média | fibra média):
---   1 | 25 | 14,62 | 68,56
+--   1 | 25 | 14,62 | 68,54
 --   2 | 25 |  1,58 | 92,73
---   3 | 24 |  0,57 | 91,42
+--   3 | 24 |  0,57 | 91,41
 --   4 | 24 |  0,30 | 90,53
 -- Obs.: com set/2026 (incompleto) o quartil 1 dava 19,83 | 54,87: o mês incompleto exagerava o efeito.
 WITH ranqueado AS (
@@ -275,9 +278,9 @@ ORDER BY quartil;
 -- 6.4 Robustez: o padrão se mantém com 5 e 6 grupos? (troque NTILE(5) por NTILE(6))
 -- Critério, definido antes de olhar: em todas as divisões, o grupo 1 tem a MAIOR
 -- participação da Starlink e a MENOR fibra.
--- Esperado com 5 grupos: grupo 1 = 20 municípios | Starlink 17,31 | fibra 62,96
+-- Esperado com 5 grupos: grupo 1 = 20 municípios | Starlink 17,30 | fibra 62,93
 --                        demais grupos com Starlink abaixo de 2,5 e fibra acima de 89
--- Esperado com 6 grupos: grupo 1 = 17 municípios | Starlink 19,38 | fibra 59,31
+-- Esperado com 6 grupos: grupo 1 = 17 municípios | Starlink 19,38 | fibra 59,28
 --                        demais grupos com Starlink abaixo de 3,4 e fibra acima de 89
 -- Resultado: o padrão se mantém com 4, 5 e 6 grupos. Quanto menor o grupo 1, mais
 -- extremo ele fica. Fora do grupo 1, a fibra fica sempre perto de 90%: a relação é de
@@ -395,12 +398,14 @@ LIMIT 3;
 SELECT COUNT(*) AS linhas FROM vw_mes_referencia;
 
 -- 10.2 O mês escolhido
--- Esperado: 2026-08-01 | 320 operadoras (enquanto a base terminar em set/2026)
+-- Esperado: 2026-08-01 | 321 operadoras | 99,79% (enquanto a base terminar em set/2026)
 SELECT mes_referencia, operadoras, media_3_meses, percentual
 FROM vw_mes_referencia;
 
 -- 10.3 Meses barrados pela regra dos 95%
--- Esperado: só 2026-09-01, com cerca de 91,6% e 2022-05-01 com 67,2%
+-- Esperado: 2022-05-01 com 67,24% e 2026-09-01 com 93,29%
+--           (set/2026 tinha 91,6% no download de 01/11: quando passar de 95%, vira o
+--           mês de referência sozinho)
 
 WITH analise AS (
     SELECT ano_mes, COUNT(DISTINCT cnpj) AS operadoras
@@ -424,7 +429,7 @@ WHERE media_3_meses IS NOT NULL
   AND operadoras < media_3_meses * 0.95;
 
 -- 10.4 Os 5 meses de menor cobertura (justifica o limite de 95%)
--- Esperado: mai/2025 em primeiro e set/2026 em segundo, os demais acima de 95%
+-- Esperado: mai/2022 (67,24%) em primeiro e set/2026 (93,29%) em segundo, os demais acima de 95%
 WITH analise AS (
     SELECT ano_mes, COUNT(DISTINCT cnpj) AS operadoras
     FROM fato_acessos
@@ -447,7 +452,7 @@ ORDER BY percentual
 LIMIT 5;
 
 -- 10.5 As views de município usam o mês de referência
--- Esperado: 2026-08-01 | 430.365 | 430.365
+-- Esperado: 2026-08-01 | 430.377 | 430.377
 SELECT r.mes_referencia,
        ev.total_acessos,
        (SELECT SUM(acessos_municipio) FROM vw_municipio_resumo) AS soma_municipios
@@ -455,20 +460,13 @@ FROM vw_mes_referencia r
 JOIN vw_evolucao_mensal ev ON ev.ano_mes = r.mes_referencia;
 
 -- 10.6 O mês incompleto, documentado
--- Esperado: 2026-09-01 | 382.217 acessos | 295 operadoras
+-- Esperado: 2026-09-01 | 402.888 acessos | 301 operadoras (eram 382.217 e 295 em 01/11)
 SELECT ms.ano_mes,
        SUM(ms.acessos_totais) AS acessos,
        COUNT(*)               AS operadoras
 FROM vw_market_share ms
 WHERE ms.ano_mes = (SELECT MAX(ano_mes) FROM vw_market_share)
 GROUP BY ms.ano_mes;
-m_dados,
-       TIMESTAMPDIFF(MONTH, MIN(ano_mes), MAX(ano_mes)) + 1 AS meses_no_intervalo
-FROM vw_market_share
-GROUP BY cnpj, empresa
-HAVING meses_com_dados < meses_no_intervalo
-ORDER BY meses_no_intervalo - meses_com_dados DESC
-LIMIT 10;
 
 -- =========================================================
 -- 11. vw_qualidade_reporte
@@ -482,7 +480,7 @@ SELECT (SELECT COUNT(*) FROM vw_qualidade_reporte) AS linhas_view,
         JOIN vw_mes_referencia r ON ms.ano_mes <= r.mes_referencia) AS cnpjs_ate_referencia;
 
 -- 11.2 Contagem por situação
--- Esperado: regular = 183 | intermitente = 137 | parou de reportar = 215
+-- Esperado: regular = 184 | intermitente = 137 | parou de reportar = 214
 SELECT situacao,
        COUNT(*)                                           AS operadoras,
        ROUND(COUNT(*) / SUM(COUNT(*)) OVER () * 100, 1)   AS pct
@@ -491,7 +489,7 @@ GROUP BY situacao
 ORDER BY operadoras DESC;
 
 -- 11.3 Operadoras ativas = operadoras do mês de referência
--- Esperado: 320 | 320 (regulares + intermitentes têm o último registro no mês de referência)
+-- Esperado: 321 | 321 (regulares + intermitentes têm o último registro no mês de referência)
 SELECT (SELECT COUNT(*)
         FROM vw_qualidade_reporte
         WHERE situacao IN ('regular', 'intermitente')) AS ativas_na_view,
@@ -535,8 +533,8 @@ WHERE empresa LIKE 'Tb Telecom%'
 SELECT COUNT(*) AS municipios FROM vw_crescimento_municipio;
 
 -- 12.2 Reconciliação com o total do estado nos dois meses
--- Esperado: acessos_atual = 430.365 e acessos_12m_atras = total de ago/2025 na vw_evolucao_mensal
---           crescimento calculado pelas somas = 20,46 (o mesmo da vw_evolucao_mensal)
+-- Esperado: acessos_atual = 430.377 e acessos_12m_atras = total de ago/2025 na vw_evolucao_mensal
+--           crescimento calculado pelas somas = 20,47 (o mesmo da vw_evolucao_mensal)
 SELECT SUM(c.acessos_atual)                                        AS soma_atual,
        SUM(c.acessos_12m_atras)                                    AS soma_12m_atras,
        (SELECT ev.total_acessos
